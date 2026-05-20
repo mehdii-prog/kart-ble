@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Kart BLE Controller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #e8ff00;
+    --accent2: #ff4500;
+    --text: #f0f0f0;
+    --muted: #666;
+    --danger: #ff2d2d;
+    --success: #00ff88;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(232,255,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(232,255,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 480px;
+    padding: 1.5rem 1.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .title-block {}
+  .kart-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  h1 span { color: var(--accent); }
+
+  .version {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Connect panel */
+  .connect-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-indicator {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+  .status-indicator .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-indicator .ping {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    transition: all 0.3s;
+  }
+  .status-indicator.connected .ring { background: var(--success); }
+  .status-indicator.connected .ping { border-color: var(--success); animation: ping 1.5s ease-out infinite; }
+  .status-indicator.connecting .ring { background: var(--accent); animation: blink 0.6s infinite; }
+  @keyframes ping { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  #status-text {
+    flex: 1;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #status-text.connected { color: var(--success); }
+  #status-text.connecting { color: var(--accent); }
+
+  #connect-btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    padding: 7px 16px;
+    border-radius: 3px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  #connect-btn:hover { background: var(--accent); color: var(--bg); }
+  #connect-btn:disabled { opacity: 0.3; cursor: default; }
+  #connect-btn.disconnect { border-color: var(--danger); color: var(--danger); }
+  #connect-btn.disconnect:hover { background: var(--danger); color: #fff; }
+
+  /* Command display */
+  .cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cmd-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .cmd-pill {
+    flex: 1;
+    height: 32px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    transition: all 0.1s;
+  }
+  .cmd-pill.active { color: var(--accent); border-color: var(--accent); background: rgba(232,255,0,0.05); }
+
+  /* Joystick */
+  .joystick-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .joystick-outer {
+    position: relative;
+    width: 240px;
+    height: 240px;
+  }
+
+  /* Corner brackets */
+  .joystick-outer::before,
+  .joystick-outer::after,
+  .joystick-outer .br,
+  .joystick-outer .bl {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-color: var(--accent);
+    border-style: solid;
+    opacity: 0.5;
+  }
+  .joystick-outer::before { top: 0; left: 0; border-width: 2px 0 0 2px; }
+  .joystick-outer::after  { top: 0; right: 0; border-width: 2px 2px 0 0; }
+  .joystick-outer .br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+  .joystick-outer .bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+
+  #joystick-base {
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .cross-h, .cross-v {
+    position: absolute;
+    background: var(--border);
+  }
+  .cross-h { width: 100%; height: 1px; top: 50%; left: 0; transform: translateY(-50%); }
+  .cross-v { width: 1px; height: 100%; left: 50%; top: 0; transform: translateX(-50%); }
+
+  /* Zone labels */
+  .zone-label {
+    position: absolute;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    pointer-events: none;
+    transition: color 0.1s;
+  }
+  .zone-label.zt { top: 14px; left: 50%; transform: translateX(-50%); }
+  .zone-label.zb { bottom: 14px; left: 50%; transform: translateX(-50%); }
+  .zone-label.zl { left: 14px; top: 50%; transform: translateY(-50%); }
+  .zone-label.zr { right: 14px; top: 50%; transform: translateY(-50%); }
+  .zone-label.lit { color: var(--accent); }
+
+  #joystick-thumb {
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    transition: border-color 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  #joystick-thumb.active { border-color: var(--accent); }
+  #joystick-thumb svg { opacity: 0.3; }
+  #joystick-thumb.active svg { opacity: 0.8; }
+
+  /* Speed */
+  .speed-section {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 16px;
+  }
+  .speed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .speed-header span:first-child {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .speed-header span:last-child {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+  }
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+
+  /* Stop button */
+  #stop-btn {
+    width: 100%;
+    height: 52px;
+    background: transparent;
+    border: 2px solid var(--danger);
+    border-radius: 4px;
+    color: var(--danger);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  #stop-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--danger);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.15s;
+  }
+  #stop-btn:hover::before { transform: scaleX(1); }
+  #stop-btn:hover { color: #fff; }
+  #stop-btn span { position: relative; z-index: 1; }
+
+  /* Keyboard hints */
+  .hints {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .hint {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+  .hint kbd {
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+  .hint span {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+
+  /* Error */
+  .error-msg {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--danger);
+    text-align: center;
+    display: none;
+    padding: 8px;
+    border: 1px solid var(--danger);
+    border-radius: 3px;
+    background: rgba(255,45,45,0.05);
+  }
+
+  footer {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    padding-bottom: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="title-block">
+      <p class="kart-label">// STM32F0 + HM-10</p>
+      <h1>KART<span>.</span>BLE</h1>
+      <p class="version">v1.0 — Chrome/Edge uniquement</p>
+    </div>
+  </header>
+
+  <div class="connect-panel">
+    <div class="status-indicator" id="indicator">
+      <div class="ring"></div>
+      <div class="ping"></div>
+    </div>
+    <span id="status-text">NON_CONNECTÉ</span>
+    <button id="connect-btn" onclick="toggleConnect()">CONNECTER</button>
+  </div>
+
+  <div class="cmd-row">
+    <span class="cmd-label">TX →</span>
+    <div class="cmd-pill" id="cmd-pill">STANDBY</div>
+  </div>
+
+  <div class="joystick-section">
+    <div class="joystick-outer">
+      <div class="br"></div>
+      <div class="bl"></div>
+      <div id="joystick-base">
+        <div class="cross-h"></div>
+        <div class="cross-v"></div>
+        <span class="zone-label zt" id="zl-Z">AVANT</span>
+        <span class="zone-label zb" id="zl-R">ARRIÈRE</span>
+        <span class="zone-label zl" id="zl-Q">G</span>
+        <span class="zone-label zr" id="zl-D">D</span>
+        <div id="joystick-thumb">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e8ff00" stroke-width="1.5">
+            <path d="M12 5v14M5 12h14"/>
+            <path d="M12 5l-3 3M12 5l3 3M12 19l-3-3M12 19l3-3M5 12l3-3M5 12l3 3M19 12l-3-3M19 12l-3 3"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speed-section">
+    <div class="speed-header">
+      <span>// PUISSANCE MOTEURS</span>
+      <span id="speed-val">300 / 500</span>
+    </div>
+    <input type="range" min="50" max="500" step="10" value="300" id="speed-slider" oninput="updateSpeed()">
+  </div>
+
+  <button id="stop-btn" onclick="sendCmd('S')">
+    <span>⬛ STOP D'URGENCE</span>
+  </button>
+
+  <div class="hints">
+    <div class="hint"><kbd>↑</kbd><span>Avant</span></div>
+    <div class="hint"><kbd>↓</kbd><span>Arrière</span></div>
+    <div class="hint"><kbd>←→</kbd><span>Virage</span></div>
+    <div class="hint"><kbd>ESPACE</kbd><span>Stop</span></div>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<footer>KART.BLE — Web Bluetooth API — 2025</footer>
+
+<script>
+const HM10_SERVICE = '0000ffe0-0000-1000-8000-00805f9b34fb';
+const HM10_CHAR    = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+let characteristic = null;
+let connected = false;
+let lastCmd = '';
+let isDragging = false;
+
+const indicator  = document.getElementById('indicator');
+const statusText = document.getElementById('status-text');
+const connectBtn = document.getElementById('connect-btn');
+const cmdPill    = document.getElementById('cmd-pill');
+const errorMsg   = document.getElementById('error-msg');
+const speedSlider= document.getElementById('speed-slider');
+const speedVal   = document.getElementById('speed-val');
+const base       = document.getElementById('joystick-base');
+const thumb      = document.getElementById('joystick-thumb');
+
+const LABELS = { Z:'AVANT', R:'ARRIÈRE', Q:'GAUCHE', D:'DROITE', S:'STOP' };
+const CENTER = 108;
+const MAX_R  = 72;
+
+function updateSpeed() {
+  speedVal.textContent = speedSlider.value + ' / 500';
+}
+
+function setStatus(state, msg) {
+  indicator.className = 'status-indicator' + (state ? ' ' + state : '');
+  statusText.textContent = msg;
+  statusText.className = state || '';
+}
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+}
+
+async function toggleConnect() {
+  if (connected) { disconnect(); return; }
+  if (!navigator.bluetooth) {
+    showError('Web Bluetooth non supporté. Utilise Chrome ou Edge sur Android/PC (pas Safari/iOS).');
+    return;
+  }
+  errorMsg.style.display = 'none';
+  try {
+    connectBtn.disabled = true;
+    setStatus('connecting', 'SCAN_EN_COURS...');
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [HM10_SERVICE] }]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnect);
+    setStatus('connecting', 'GATT_CONNECT...');
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(HM10_SERVICE);
+    characteristic = await service.getCharacteristic(HM10_CHAR);
+    connected = true;
+    const name = device.name || 'HM-10';
+    setStatus('connected', 'CONNECTÉ_' + name.toUpperCase().replace(/\s+/g,'_'));
+    connectBtn.textContent = 'DÉCONNECTER';
+    connectBtn.className = 'disconnect';
+    connectBtn.disabled = false;
+  } catch(e) {
+    setStatus('', 'NON_CONNECTÉ');
+    connectBtn.disabled = false;
+    if (e.name !== 'NotFoundError') showError('Erreur: ' + e.message);
+  }
+}
+
+function onDisconnect() {
+  connected = false; characteristic = null;
+  setStatus('', 'DÉCONNECTÉ');
+  connectBtn.textContent = 'CONNECTER';
+  connectBtn.className = '';
+  connectBtn.disabled = false;
+}
+
+function disconnect() {
+  if (characteristic) characteristic.service.device.gatt.disconnect();
+}
+
+async function sendCmd(cmd) {
+  // Allume la zone label active
+  document.querySelectorAll('.zone-label').forEach(el => el.classList.remove('lit'));
+  if (cmd !== 'S') {
+    const el = document.getElementById('zl-' + cmd);
+    if (el) el.classList.add('lit');
+  }
+
+  cmdPill.textContent = LABELS[cmd] || cmd;
+  cmdPill.className = 'cmd-pill' + (cmd !== 'S' ? ' active' : '');
+
+  if (cmd === lastCmd) return;
+  lastCmd = cmd;
+
+  if (!connected || !characteristic) return;
+  try {
+    await characteristic.writeValue(new TextEncoder().encode(cmd));
+  } catch(e) { console.warn('BLE write:', e); }
+}
+
+function getCmd(dx, dy) {
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < 22) return 'S';
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  if (angle > -55 && angle < 55)   return 'D';
+  if (angle > 125 || angle < -125) return 'Q';
+  if (angle >= 55 && angle <= 125)  return 'R';
+  return 'Z';
+}
+
+function moveThumb(cx, cy) {
+  const rect = base.getBoundingClientRect();
+  let dx = cx - rect.left - CENTER;
+  let dy = cy - rect.top  - CENTER;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > MAX_R) { dx = dx/dist*MAX_R; dy = dy/dist*MAX_R; }
+  thumb.style.left = (CENTER + dx) + 'px';
+  thumb.style.top  = (CENTER + dy) + 'px';
+  thumb.style.transform = 'translate(-50%,-50%)';
+  sendCmd(getCmd(dx, dy));
+}
+
+function resetThumb() {
+  thumb.style.left = '50%';
+  thumb.style.top  = '50%';
+  thumb.style.transform = 'translate(-50%,-50%)';
+  thumb.classList.remove('active');
+  sendCmd('S');
+}
+
+base.addEventListener('mousedown', e => {
+  isDragging = true; thumb.classList.add('active'); moveThumb(e.clientX, e.clientY);
+});
+window.addEventListener('mousemove', e => { if (isDragging) moveThumb(e.clientX, e.clientY); });
+window.addEventListener('mouseup',   () => { if (isDragging) { isDragging = false; resetThumb(); } });
+
+base.addEventListener('touchstart', e => {
+  e.preventDefault(); isDragging = true; thumb.classList.add('active');
+  moveThumb(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+base.addEventListener('touchmove', e => {
+  e.preventDefault(); moveThumb(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+base.addEventListener('touchend', () => { isDragging = false; resetThumb(); });
+
+document.addEventListener('keydown', e => {
+  const map = { ArrowUp:'Z', ArrowDown:'R', ArrowLeft:'Q', ArrowRight:'D', ' ':'S' };
+  if (map[e.key]) { e.preventDefault(); sendCmd(map[e.key]); }
+});
+document.addEventListener('keyup', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) sendCmd('S');
+});
+</script>
+</body>
+</html>
